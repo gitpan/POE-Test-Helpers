@@ -1,28 +1,38 @@
 ---
-name: POE-Test-Helpers
-version: 0.06
+abstract: 'Testing framework for POE'
 author:
-  - 'Sawyer <xsawyerx@cpan.org>'
-abstract: Testing framework for POE
-license: perl
-resources:
-  license: http://dev.perl.org/licenses/
+  - 'Sawyer X <xsawyerx@cpan.org>'
 build_requires:
-  MooseX::POE: 0.205
-  Test::More: 0
-requires:
-  List::AllUtils: 0
-  Moose: 0.8
-  POE: 1.2
-  Test::Deep: 0
-  Test::Deep::NoTest: 0
+  English: 0
+  File::Find: 0
+  File::Temp: 0
+  Module::Build: 0.3601
+  MooseX::POE: 0
+  POE: 0
+  POE::Kernel: 0
+  Test::Exception: 0
 configure_requires:
-  Module::Build: 0.35
-provides:
-  POE::Test::Helpers:
-    file: lib/POE/Test/Helpers.pm
-    version: 0.06
-generated_by: Module::Build version 0.35
+  ExtUtils::MakeMaker: 6.31
+  Module::Build: 0.3601
+dynamic_config: 0
+generated_by: 'Dist::Zilla version 4.101880, CPAN::Meta::Converter version 2.101610'
+license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
+name: POE-Test-Helpers
+requires:
+  Carp: 0
+  Data::Validate: 0
+  List::AllUtils: 0
+  Moose::Role: 0
+  POE::Session: 0
+  Test::Builder::Module: 0
+  Test::Deep: 0
+  Test::Deep::NoTest: 0
+  Test::More: 0
+  indirect: 0
+  namespace::autoclean: 0
+  parent: 0
+  strictures: 1
+version: 1.07

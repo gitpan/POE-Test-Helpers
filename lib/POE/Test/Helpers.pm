@@ -1,160 +1,302 @@
+use strictures 1;
 package POE::Test::Helpers;
-
-our $VERSION = '0.06';
+BEGIN {
+  $POE::Test::Helpers::VERSION = '1.07';
+}
+# ABSTRACT: Testing framework for POE
 
 use Carp;
-use Test::Deep         qw( cmp_bag bag );
-use Test::Deep::NoTest qw( eq_deeply );
-use List::AllUtils     qw( none );
-use Test::More;
-use Moose::Role;
-use POE::Session; # for POE variables
+use parent 'Test::Builder::Module';
+use POE::Session;
+use Data::Validate    'is_integer';
+use List::AllUtils     qw( first none );
+use Test::Deep::NoTest qw( bag eq_deeply );
+use namespace::autoclean;
 
-# TODO: use native Counter here
-# TODO: use native Hash here
-has 'order_count'  => ( is => 'rw', isa => 'Int',     default => 0          );
-has 'track_seq'    => ( is => 'ro', isa => 'HashRef', default => sub { {} } );
-has 'seq_ordering' => ( is => 'rw', isa => 'HashRef', default => sub { {} } );
-has 'event_params' => ( is => 'rw', isa => 'HashRef', default => sub { {} } );
+my $CLASS = __PACKAGE__;
 
-has 'event_params_type' => ( is => 'rw', isa => 'Str', default => 'ordered' );
+sub new {
+    my ( $class, %opts ) = @_;
 
-before 'STARTALL' => sub {
-    my $self  = shift;
-    my $class = ref $self;
-    foreach my $event ( keys %{ $self->seq_ordering } ) {
-        Moose::Meta::Class->initialize($class)->add_before_method_modifier(
-            $event => sub {
-                my $self = $_[OBJECT];
-                $self->_seq_order($event);
-            }
-        );
-    }
+    # must have tests
+    my $tests = $opts{'tests'};
+    defined $tests       or croak 'Missing tests data in new';
+    ref $tests eq 'HASH' or croak 'Tests data should be a hashref in new';
 
-    foreach my $event ( keys %{ $self->event_params } ) {
-        Moose::Meta::Class->initialize($class)->add_before_method_modifier(
-            $event => sub {
-                my $self = $_[OBJECT];
-                $self->_seq_order( $event, @_[ ARG0 .. $#_ ] );
-            }
-        );
-    }
-};
+    # must have run method
+    exists $opts{'run'}        or croak 'Missing run method in new';
+    ref $opts{'run'} eq 'CODE' or croak 'Run method should be a coderef in new';
 
-after 'STOPALL' => sub {
-    my $self = shift;
-    $self->_seq_end();
-};
+    foreach my $name ( keys %{$tests} ) {
+        my $test_data = $tests->{$name};
 
-sub order {
-    my ( $self, $order, $msg ) = @_;
-    my $new_order = $order + 1;
-    is( $order, $self->order_count, "($order) $msg" );
-    $self->order_count( $new_order );
-    return;
-}
+        my ( $count, $order, $params, $deps ) =
+            @{$test_data}{ qw/ count order params deps / };
 
-# TODO: max value should only be counted once
-# this can be done via trigger() perhaps
-sub _seq_order {
-    my ( $self, $event, @args ) = @_;
-    my $value = $self->seq_ordering->{$event} || q{};
+        # currently we still allow to register tests without requiring
+        # at least a count or params
 
-    # checking sequences
-    if ( ref $value eq 'ARRAY' ) {
-        # event dependencies
-        $self->_seq_check_deps( $value, $event );
-    } elsif ( ref $value eq 'HASH' ) {
-        # mixture of sub counting and event dependencies
-        # checking deps, setting max value
-        if ( keys %{$value} > 1 ) {
-            carp "Skipping $event, too many definitions.\n";
-            return;
+        # check the count
+        if ( defined $count ) {
+            # count is only tested in the last run so we just check the param
+            defined is_integer($count) or croak 'Bad event count in new';
         }
 
-        my ( $max, $array ) = each %{$value};
+        # check the order
+        if ( defined $order ) {
+            defined is_integer($order) or croak 'Bad event order in new';
+        }
 
-        $self->_seq_check_deps( $array, $event );
-        $self->track_seq->{$event}{'max'} = $max;
-    } elsif ( ! ref $value ) {
-        # just setting the max value for each sub
-        $self->track_seq->{$event}{'max'} = $value;
-    } else {
-        carp "Problem with value: $value\n";
+        # check deps
+        if ( defined $deps ) {
+            ref $deps eq 'ARRAY' or croak 'Bad event deps in new';
+        }
+
+        # check the params
+        if ( defined $params ) {
+            ref $params eq 'ARRAY' or croak 'Bad event params in new';
+        }
     }
 
-    # checking parameter
-    if ( my $event_params = $self->event_params->{$event} ) {
-        my $current_params  = @args ? \@args : [];
+    my $self = bless {
+        tests       => $tests,
+        run         => $opts{'run'},
+        params_type => $opts{'params_type'} || 'ordered',
+    }, $class;
 
-        # event_params defined, we can check
-        if ( $self->event_params_type eq 'ordered' ) {
-            my $expected_params = shift @{$event_params} || [];
+    return $self;
+}
 
-            cmp_bag(
+sub spawn {
+    my ( $class, %opts ) = @_;
+
+    my $self = $class->new(%opts);
+
+    $self->{'session_id'} = POE::Session->create(
+        object_states => [
+            $self => [ '_start', '_child' ],
+        ],
+    )->ID;
+
+    return $self;
+}
+
+sub reached_event {
+    my ( $self, %opts ) = @_;
+    # we don't have to get params,
+    # but we do have to get the name and order
+
+    my $name = $opts{'name'};
+    # must have name
+    defined $name && $name ne ''
+        or croak 'Missing event name in reached_event';
+
+    my ( $event_order, $event_params, $event_deps ) =
+        @opts{ qw/ order params deps / };
+
+    defined $event_order
+        or croak 'Missing event order in reached_event';
+    defined is_integer($event_order)
+        or croak 'Event order must be integer in reached_event';
+
+    if ( defined $event_params ) {
+        ref $event_params eq 'ARRAY'
+            or croak 'Event params must be arrayref in reached_event';
+    }
+
+    if ( defined $event_deps ) {
+        ref $event_deps eq 'ARRAY'
+            or croak 'Event deps must be arrayref in reached_event';
+    }
+
+    my $test_data = $self->{'tests'}{$name};
+
+    my ( $test_count, $test_order, $test_params, $test_deps ) =
+        @{$test_data}{ qw/ count order params deps / };
+
+    # currently we still allow to register events without requiring
+    # at least a count or params
+
+    # add the event to the list of events
+    push @{ $self->{'events_order'} }, $name;
+
+    # check the order
+    if ( defined $test_order ) {
+        $self->check_order( $name, $event_order );
+    }
+
+    # check deps
+    if ( defined $test_deps ) {
+        $self->check_deps( $name, $event_deps );
+    }
+
+    # check the params
+    if ( defined $test_params ) {
+        $self->check_params( $name, $event_params );
+    }
+
+    return 1;
+}
+
+sub check_count {
+    my ( $self, $event, $count ) = @_;
+    my $tb = $CLASS->builder;
+
+    my $count_from_event = grep /^$event$/, @{ $self->{'events_order'} };
+    $tb->is_num( $count_from_event, $count, "$event ran $count times" );
+
+    return 1;
+}
+
+sub check_order {
+    my ( $self, $event, $event_order ) = @_;
+    my $tb = $CLASS->builder;
+
+    my $event_from_order = $self->{'events_order'}[$event_order];
+
+    $tb->is_eq( $event, $event_from_order, "($event_order) $event" );
+
+    return 1;
+}
+
+sub check_deps {
+    my ( $self, $event, $deps ) = @_;
+    my $tb = $CLASS->builder;
+
+    # get the event's tested dependencies and all events run so far
+    my @deps_from_event = @{ $self->{'tests'}{$event}{'deps'} };
+    my @all_events      = @{ $self->{'events_order'} };
+
+    # check for problematic dependencies
+    my @problems = ();
+    foreach my $dep_event (@deps_from_event) {
+        if ( ! grep /^$dep_event$/, @all_events ) {
+            push @problems, $dep_event;
+        }
+    }
+
+    # serialize possible errors
+    my $missing = join ', ', @problems;
+    my $extra   = @problems ? "[$missing missing]" : q{};
+
+    $tb->ok( ( @problems == 0 ), "Correct sub deps for ${event}${extra}" );
+}
+
+sub check_params {
+    my ( $self, $event, $current_params ) = @_;
+    my $tb = $CLASS->builder;
+
+    my $test_params = $self->{'tests'}{$event}{'params'};
+
+    if ( $self->{'params_type'} eq 'ordered' ) {
+        # remove the fetched
+        my $expected_params = shift @{$test_params} || [];
+
+        $tb->ok(
+            eq_deeply(
                 $current_params,
                 $expected_params,
-                "($event) Correct params",
-            );
-        } elsif ( my $type = $self->event_params_type eq 'unordered' ) {
-            my $okay = 0;
+            ),
+            "($event) Correct params",
+        );
+    } else {
+        # don't remove, just match
+        my $okay = 0;
 
-            foreach my $expected_params ( @{$event_params} ) {
-                if ( eq_deeply(
-                        $current_params,
-                        bag(@{$expected_params}) ) ) {
-                    $okay++;
-                }
+        foreach my $expected_params ( @{$test_params} ) {
+            if ( eq_deeply(
+                    $current_params,
+                    bag(@{$expected_params}) ) ) {
+                $okay++;
             }
-
-            ok( $okay, "($event) Correct [unordered] params" );
-        } else {
-            carp "Unknown event_params_type: $type\n";
         }
-    }
 
-    $self->track_seq->{$event}{'cur'}++;
-    return;
+        $tb->ok( $okay, "($event) Correct [unordered] params" );
+    }
 }
 
-sub _seq_check_deps {
-    my ( $self, $got_deps, $event ) = @_;
-    my @exp_deps = keys %{ $self->track_seq };
-    my @bad      = ();
+sub _child {
+    # this says that _start on our spawned session started
+    # we should mark _start on our superhash
+    my $self    = $_[OBJECT];
+    my $change  = $_[ARG0];
+    my $session = $_[ARG1];
 
-    foreach my $dep ( @{$got_deps} ) {
-        if ( none { $dep eq $_ } @exp_deps ) {
-            push @bad, $dep;
-        }
-    }
+    my $internals = $session->[KERNEL];
 
-    my $data  = join ', ', map { qq{"$_"} } @bad;
-    my $extra = scalar @bad ? " [$data missing]" : q{};
-    ok( ! scalar @bad, "Correct sequence for $event" . $extra );
+    if ( $change eq 'create' ) {
+        $self->reached_event(
+            name  => '_start',
+            order => 0,
+        );
+    } elsif ( $change eq 'lose' ) {
+        # get the last events_order
+        my $order = $self->{'events_order'}             ?
+                    scalar @{ $self->{'events_order'} } :
+                    0;
 
-    return;
-}
-
-# TODO: refactoring plzkthx
-sub _seq_end {
-    my $self = shift;
-    # now we can check th sub counting
-    foreach my $event ( keys %{ $self->seq_ordering } ) {
-        $self->track_seq->{$event}{'max'} || next;
-
-        is(
-            $self->track_seq->{$event}{'cur'},
-            $self->track_seq->{$event}{'max'},
-            "($event) Correct number of runs",
+        $self->reached_event(
+            name  => '_stop',
+            order => $order,
         );
 
+        # checking the count
+        $self->check_all_counts;
     }
 }
 
-no Moose::Role;
+sub check_all_counts {
+    my $self = shift;
+    foreach my $test ( keys %{ $self->{'tests'} } ) {
+        my $test_data = $self->{'tests'}{$test};
+
+        if ( exists $test_data->{'count'} ) {
+            $self->check_count( $test, $test_data->{'count'} );
+        }
+    }
+}
+
+sub _start {
+    my ( $self, $kernel ) = @_[ OBJECT, KERNEL ];
+
+    # collect the keys of everyone
+    # if exists key in test, add a test for it for them
+    $self->{'session_id'} = $_[SESSION]->ID();
+
+    my @subs_to_override = keys %{ $self->{'tests'} };
+
+    my $callback        = $self->{'run'};
+    my $session_to_test = $callback->();
+    my $internal_data   = $session_to_test->[KERNEL];
+
+    # 0 is done by _start in _child event, so we start from 1
+    my $count = 1;
+
+    foreach my $sub_to_override (@subs_to_override) {
+        # use _child event to handle these
+        $sub_to_override eq '_start' || $sub_to_override eq '_stop' and next;
+
+        # override the subroutine
+        my $old_sub = $internal_data->{$sub_to_override};
+        my $new_sub = sub {
+            $self->reached_event(
+                name   => $sub_to_override,
+                order  => $count++,
+                params => [ @_[ ARG0 .. $#_ ] ],
+            );
+
+            goto &$old_sub;
+        };
+
+        $internal_data->{$sub_to_override} = $new_sub;
+    }
+}
+
 1;
 
-__END__
+
+
+=pod
 
 =head1 NAME
 
@@ -162,45 +304,51 @@ POE::Test::Helpers - Testing framework for POE
 
 =head1 VERSION
 
-Version 0.06
+version 1.07
 
 =head1 SYNOPSIS
 
-This module provides a Moose role to allow you to test your POE code.
+This module provides you with a framwork to easily write tests for your POE
+code.
 
-Currently it's best used with L<MooseX::POE> but L<POE::Session> code is also doable.
-
-Perhaps a little code snippet.
+The main purpose of this module is to be non-instrusive (or abstrusive) and
+allow you to write your code without getting in your way.
 
     package MySession;
-    use MooseX::POE;
-    with 'POE::Test::Helpers';
 
-    has '+seq_ordering' => ( default => sub { {
-        last => { 1 => ['next'] },
-    } } );
+    use Test::More tests => 1;
+    use POE;
+    use POE::Test::Helpers;
 
-    event 'START' => sub {
-        $_[KERNEL]->yield('next');
+    # defining a callback to create a session
+    my $run = sub {
+        return POE::Session->create(
+            inline_states => {
+                '_start' => sub {
+                    print "Start says hi!\n";
+                    $_[KERNEL]->yield('next');
+                },
+                'next' => sub { print "Next says hi!\n" },
+            }
+        );
     };
 
-    event 'next' => sub {
-        $_[KERNEL]->yield('last');
-    };
+    # here we define the tests
+    # and tell POE::Test::Helpers to run your session
+    POE::Test::Helpers->spawn(
+        run   => $run,
+        tests => {
+            # _start is actually 0
+            # next will run right after _start
+            next => { order => 1 },
+        },
+    );
 
-    event 'last' => sub {
-        ...
-    };
-
-    package main;
-    use Test::More tests => 2;
-    use POE::Kernel;
-    MySession->new();
-    POE::Kernel->run();
-
-    ...
-
-Testing event-based programs is not trivial at all. There's a lot of hidden race conditions and unknown behavior afoot. Usually we separate the testing to components, subroutines and events. However, as good as it is (and it's good!), it doesn't give us the exact behavior we'll get from the application once running.
+Testing event-based programs is not trivial at all. There's a lot of hidden race
+conditions and unknown behavior afoot. Usually we separate the testing to
+components, subroutines and events. However, as good as it is (and it's good!),
+it doesn't give us the exact behavior we'll get from the application once
+running.
 
 There are also a lot of types of tests that we would want to run, such as:
 
@@ -208,15 +356,20 @@ There are also a lot of types of tests that we would want to run, such as:
 
 =item * Ordered Events:
 
-Did every event run in the specific ordered I wanted it to?
+Did every event run in the specific order I wanted it to?
 
 I<(maybe some event was called first instead of third...)>
 
 =item * Sequence Ordered Events:
 
-Declaring dependency events for tested events.
+Did every event run only after other events?
 
-I<(an event is only okay if the preceeding events ran first)>
+Imagine you want to check whether C<run_updates> ran, but you know it can should
+only run after C<get_main_status> ran. In event-based programming, you would
+give up the idea of testing this possible race condition, but with
+Test::POE::Helpers you can test it.
+
+I<< C<run_updates> can only run after C<get_main_status> >>
 
 =item * Event Counting:
 
@@ -236,54 +389,174 @@ Same thing, just without having a specific order of sets of events.
 
 =back
 
-This module allows to do all those things using a simple L<Moose> Role.
-
-In order to use it, you must consume the role (using I<with>) and then change the following attributes.
-
-=head1 Attributes
-
-=head2 seq_ordering
-
-This is a hash reference which sets the number of times each event can be run and/or the event that had to come first before the event could be run. That is, if you have an event "world", you can specify that "world" can only be run once, or can only be run twice. You can instead specify that "world" can only be run after a different event - "hello" - has been run.
-
-Here are some examples:
-
-    has '+seq_ordering' => ( default => sub { {
-        hello => 1,                  # hello can only be run once
-        there => ['hello'],          # there can only be run after hello
-        world => { 2 => ['hello'] }, # world has to be run twice and only after hello
-    } } );
-
-One thing to remember is that event dependencies are not direct. That is, in the above example, "world" can be run right after "there" but as long as "hello" was run sometime prior to that, it will be okay. That is, sequence ordering is not strict.
-
-=head2 event_params
-
-This is a hash reference which sets the parameters each event is expecting. By default, this parameters must be consecutive. That is, if there are two sets of parameters, the first one is what's tested when the event is run for the first time and the second one will be tested when the event is run the second time. If this is troublesome for you, check the next attribute, you'll enjoy that.
-
-    has '+event_params' => ( default => sub { {
-        goodbye => [ [ 'cruel',  'world' ] ],
-        hello   => [ [ 'ironic', 'twist' ] ],
-        special => [ [ 'params', 'for', first', 'run' ], [ 'params', 'for', 'second' ] ],
-    } } );
-
-You'll notice one weird thing: two array refs. The reason is actually very simple. This test checks each parameter separately, so you specify sets of parameters, each set for a different run. Thus, each set is defined in an array ref. Because of this, even if you're only giving one set of params, it needs to be encapsulated in an array ref. This might change in the future, if anyone will care enough.
-
-=head2 event_params_type
-
-This is a simple string which controls how the event_params will go. Meanwhile it can only be set to "ordered" and "unordered". This might change in the future or could be replaced with "event_params_ordered" boolean or something. Be warned.
-
-Basically this means that you don't care about the order of how the parameters get there, but only that whenever the event was run, it had one of the sets of parameters.
+This module allows to do all those things using a simple API.
 
 =head1 METHODS
 
-=head2 order
+=head2 spawn
 
-Simple ordered tests can also be done using this framework, but are less intuitive. In order to set orders of events, a method has to be run. I'm sure this will be changed, so stay tuned.
+Creates a new L<POE::Session> that manages in the background the tests. If you
+wish not to create a session, but manage things yourself, check C<new> below and
+the additionally available methods.
 
-    event 'example' => sub {
-        my $self = $_[OBJECT];
-        $self->order( 0, 'Example runs first!' );
-    };
+Accepts the following options:
+
+=head3 run
+
+A callback to create your session. This is required so POE::Test::Helpers could
+hook up to your code internally without you having to set up hooks for it.
+
+The callback is expected to return the session object. This means that you can
+either provide a code reference to your C<< POE::Session->create() >> call or
+you could set up an arbitrary code reference that just returns a session object
+you want to monitor.
+
+    use POE::Test::Helpers;
+
+    # we want to test Our::Module
+    POE::Test::Helpers->spawn(
+        run => sub { Our::Module->spawn( ... ) },
+        ...
+    );
+
+    # or, if we want to set up the session ourselves in more intricate ways
+    my $object = Our::Module->new( ... );
+    my $code   = sub { $object->create_session };
+
+    POE::Test::Helpers->spawn(
+        run => $code,
+        ...
+    );
+
+In case you want to simply run a test in an asynchronous way (and that is why
+you're using POE), you could do it this way:
+
+    use POE::Test::Helpers;
+
+    sub start {
+        # POE code
+        $_[KERNEL]->yield('next');
+    }
+
+    sub next {
+        # POE code
+    }
+
+    # now provide POE::Test::Helpers with a coderef that creates a POE::Session
+    POE::Test::Helpers->spawn(
+        run => sub {
+            POE::Session->create(
+                inline_states => [ qw/ _start next / ],
+            );
+        },
+    );
+
+=head3 tests
+
+Describes what tests should be done. You need to provide each event that will be
+tested and what is tested on it and how. There are a lot of different tests that
+are available for you.
+
+You can provide multiple tests per event, as much as you want.
+
+    POE::Test::Helpers->spawn(
+        run   => $run_method,
+        tests => {
+            # testing that "next" was run once
+            next => { count => 1 },
+
+            # testing that "more" wasn't run at all
+            more => { count => 0 },
+
+            # testing that "again" was run 3 times
+            # and that "next" was run beforehand
+            again => {
+                count => 3,
+                deps  => ['next'],
+            },
+
+            # testing that "last" was run 4th
+            # and what were the subroutine parameters each time
+            last => {
+                order  => 3, # 0 is first, 1 is second...
+                params => [ [ 'first', 'params' ], ['second'] ],
+            },
+        },
+    );
+
+=head3 params_type
+
+Ordinarily, the params are checked in an I<ordered> fashion. This means that it
+checks the first ones against the first arrayref, the second one against the
+third and so on.
+
+However, sometimes you just want to provide a few sets of I<possible> parameters
+which means it I<might> be one of these, but necessarily in this order.
+
+This helps in case of race conditions when you don't know what comes first and
+frankly don't even care.
+
+You can change this simply by setting this attribute to C<unordered>.
+
+    use POE::Test::Helpers;
+
+    POE::Test::Helpers->spawn(
+        run          => $run_method,
+        event_params => 'unordered',
+        tests        => {
+            checks => {
+                # either called with "now" or "then" parameters
+                # doesn't matter the order
+                params => [ ['now'], ['then'] ],
+            },
+        },
+    );
+
+=head2 new
+
+Creates an instance of the underlying object. Takes the exact same attributes as
+C<spawn> above but does B<not> create a L<POE::Session>. This is useful if you
+want to embed the API and use it elsewhere.
+
+This is what L<POE::Test::Helpers::MooseRole> uses.
+
+=head2 reached_event
+
+A method of the underlying object that is injected into any event you want to
+test in the session returned by the C<run> attribute.
+
+To use it you must send it the information of the event you're in.
+
+    $object->reached_event(
+        name   => 'special',
+        order  => 3, # we're 4th (counting starts at 0)
+        params => [ @_[ ARG0 .. $# ] ], # if any
+    );
+
+=head2 check_deps
+
+A method of the underlying object that runs a check of the event dependencies
+against the tests that were given.
+
+=head2 check_order
+
+A method of the underlying object that runs a check of the order of events
+against the tests that were given.
+
+=head2 check_params
+
+A method of the underlying object that runs a check of the parameters of events
+against the tests that were given.
+
+=head2 check_all_counts
+
+A method of the underlying object that requests to run count checks for every
+event.
+
+=head2 check_count
+
+A method of the underlying object that runs a check of the events' runtime count
+against the tests that were given.
 
 =head1 AUTHOR
 
@@ -291,9 +564,7 @@ Sawyer, C<< <xsawyerx at cpan.org> >>
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<bug-poe-test-simple at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=POE-Test-Helpers>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
+Please use the Github Issues tracker.
 
 =head1 SUPPORT
 
@@ -339,17 +610,24 @@ Thanks for the input and ideas. Thanks for L<POE>!
 
 =item * #moose and #poe
 
-Really great people and constantly helping me with stuff, including one of the core principles in this module.
+Really great people and constantly helping me with stuff, including one of the
+core principles in this module.
 
 =back
 
-=head1 COPYRIGHT & LICENSE
+=head1 AUTHOR
 
-Copyright 2009 Sawyer, all rights reserved.
+  Sawyer X <xsawyerx@cpan.org>
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
+=head1 COPYRIGHT AND LICENSE
 
-See http://dev.perl.org/licenses/ for more information.
+This software is copyright (c) 2010 by Sawyer X.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+
+
+__END__
 
