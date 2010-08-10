@@ -44,7 +44,7 @@ my %WriteMakefileArgs = (
     'parent' => '0',
     'strictures' => '1'
   },
-  'VERSION' => '1.07',
+  'VERSION' => '1.08',
   'test' => {
     'TESTS' => 't/*.t t/nonmxpoe/*.t'
   }

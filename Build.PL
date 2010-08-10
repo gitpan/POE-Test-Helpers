@@ -25,7 +25,7 @@ my %module_build_args = (
     'Sawyer X <xsawyerx@cpan.org>'
   ],
   'dist_name' => 'POE-Test-Helpers',
-  'dist_version' => '1.07',
+  'dist_version' => '1.08',
   'license' => 'perl',
   'module_name' => 'POE::Test::Helpers',
   'recommends' => {},

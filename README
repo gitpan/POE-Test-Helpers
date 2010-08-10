@@ -2,16 +2,14 @@ NAME
     POE::Test::Helpers - Testing framework for POE
 
 VERSION
-    version 1.07
+    version 1.08
 
 SYNOPSIS
     This module provides you with a framwork to easily write tests for your
     POE code.
 
-    The main purpose of this module is to be non-instrusive (or abstrusive)
+    The main purpose of this module is to be non-instrusive (nor abstrusive)
     and allow you to write your code without getting in your way.
-
-        package MySession;
 
         use Test::More tests => 1;
         use POE;
@@ -146,7 +144,7 @@ METHODS
 
    tests
     Describes what tests should be done. You need to provide each event that
-    will be tested and what is tested on it and how. There are a lot of
+    will be tested and what is tested with it and how. There are a lot of
     different tests that are available for you.
 
     You can provide multiple tests per event, as much as you want.
@@ -179,11 +177,11 @@ METHODS
    params_type
     Ordinarily, the params are checked in an *ordered* fashion. This means
     that it checks the first ones against the first arrayref, the second one
-    against the third and so on.
+    against the second and so on.
 
     However, sometimes you just want to provide a few sets of *possible*
-    parameters which means it *might* be one of these, but necessarily in
-    this order.
+    parameters which means it *might* be one of these, but not necessarily
+    in this order.
 
     This helps in case of race conditions when you don't know what comes
     first and frankly don't even care.
