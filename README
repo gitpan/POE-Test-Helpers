@@ -2,7 +2,7 @@ NAME
     POE::Test::Helpers - Testing framework for POE
 
 VERSION
-    version 1.08
+    version 1.09
 
 SYNOPSIS
     This module provides you with a framwork to easily write tests for your

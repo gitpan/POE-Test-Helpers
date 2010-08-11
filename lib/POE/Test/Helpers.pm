@@ -1,7 +1,7 @@
 use strictures 1;
 package POE::Test::Helpers;
 BEGIN {
-  $POE::Test::Helpers::VERSION = '1.08';
+  $POE::Test::Helpers::VERSION = '1.09';
 }
 # ABSTRACT: Testing framework for POE
 
@@ -304,7 +304,7 @@ POE::Test::Helpers - Testing framework for POE
 
 =head1 VERSION
 
-version 1.08
+version 1.09
 
 =head1 SYNOPSIS
 

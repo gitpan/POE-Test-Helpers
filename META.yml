@@ -6,14 +6,12 @@ build_requires:
   English: 0
   File::Find: 0
   File::Temp: 0
-  Module::Build: 0.3601
   MooseX::POE: 0
   POE: 0
   POE::Kernel: 0
   Test::Exception: 0
 configure_requires:
   ExtUtils::MakeMaker: 6.31
-  Module::Build: 0.3601
 dynamic_config: 0
 generated_by: 'Dist::Zilla version 4.101831, CPAN::Meta::Converter version 2.101591'
 license: perl
@@ -35,4 +33,4 @@ requires:
   namespace::autoclean: 0
   parent: 0
   strictures: 1
-version: 1.08
+version: 1.09

@@ -15,15 +15,13 @@ my %WriteMakefileArgs = (
     'English' => '0',
     'File::Find' => '0',
     'File::Temp' => '0',
-    'Module::Build' => '0.3601',
     'MooseX::POE' => '0',
     'POE' => '0',
     'POE::Kernel' => '0',
     'Test::Exception' => '0'
   },
   'CONFIGURE_REQUIRES' => {
-    'ExtUtils::MakeMaker' => '6.31',
-    'Module::Build' => '0.3601'
+    'ExtUtils::MakeMaker' => '6.31'
   },
   'DISTNAME' => 'POE-Test-Helpers',
   'EXE_FILES' => [],
@@ -44,7 +42,7 @@ my %WriteMakefileArgs = (
     'parent' => '0',
     'strictures' => '1'
   },
-  'VERSION' => '1.08',
+  'VERSION' => '1.09',
   'test' => {
     'TESTS' => 't/*.t t/nonmxpoe/*.t'
   }
