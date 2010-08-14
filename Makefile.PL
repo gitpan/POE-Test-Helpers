@@ -42,9 +42,9 @@ my %WriteMakefileArgs = (
     'parent' => '0',
     'strictures' => '1'
   },
-  'VERSION' => '1.09',
+  'VERSION' => '1.10',
   'test' => {
-    'TESTS' => 't/*.t t/nonmxpoe/*.t'
+    'TESTS' => 't/*.t t/mooserole/*.t t/regular/*.t'
   }
 );
 

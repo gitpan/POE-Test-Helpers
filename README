@@ -2,10 +2,10 @@ NAME
     POE::Test::Helpers - Testing framework for POE
 
 VERSION
-    version 1.09
+    version 1.10
 
 SYNOPSIS
-    This module provides you with a framwork to easily write tests for your
+    This module provides you with a framework to easily write tests for your
     POE code.
 
     The main purpose of this module is to be non-instrusive (nor abstrusive)
@@ -203,46 +203,35 @@ METHODS
         );
 
   new
-    Creates an instance of the underlying object. Takes the exact same
-    attributes as "spawn" above but does not create a POE::Session. This is
-    useful if you want to embed the API and use it elsewhere.
-
-    This is what POE::Test::Helpers::MooseRole uses.
+    Creates the underlying object. Please review POE::Test::Helpers::API for
+    this.
 
   reached_event
-    A method of the underlying object that is injected into any event you
-    want to test in the session returned by the "run" attribute.
-
-    To use it you must send it the information of the event you're in.
-
-        $object->reached_event(
-            name   => 'special',
-            order  => 3, # we're 4th (counting starts at 0)
-            params => [ @_[ ARG0 .. $# ] ], # if any
-        );
+    Underlying object method. Please review POE::Test::Helpers::API for
+    this.
 
   check_deps
-    A method of the underlying object that runs a check of the event
-    dependencies against the tests that were given.
+    Underlying object method. Please review POE::Test::Helpers::API for
+    this.
 
   check_order
-    A method of the underlying object that runs a check of the order of
-    events against the tests that were given.
+    Underlying object method. Please review POE::Test::Helpers::API for
+    this.
 
   check_params
-    A method of the underlying object that runs a check of the parameters of
-    events against the tests that were given.
+    Underlying object method. Please review POE::Test::Helpers::API for
+    this.
 
   check_all_counts
-    A method of the underlying object that requests to run count checks for
-    every event.
+    Underlying object method. Please review POE::Test::Helpers::API for
+    this.
 
   check_count
-    A method of the underlying object that runs a check of the events'
-    runtime count against the tests that were given.
+    Underlying object method. Please review POE::Test::Helpers::API for
+    this.
 
 AUTHOR
-    Sawyer, "<xsawyerx at cpan.org>"
+    Sawyer X, "<xsawyerx at cpan.org>"
 
 BUGS
     Please use the Github Issues tracker.
