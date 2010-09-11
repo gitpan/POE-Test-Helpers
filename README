@@ -2,7 +2,7 @@ NAME
     POE::Test::Helpers - Testing framework for POE
 
 VERSION
-    version 1.10
+    version 1.11
 
 SYNOPSIS
     This module provides you with a framework to easily write tests for your
@@ -38,6 +38,8 @@ SYNOPSIS
                 next => { order => 1 },
             },
         );
+
+        POE::Kernel->run;
 
     Testing event-based programs is not trivial at all. There's a lot of
     hidden race conditions and unknown behavior afoot. Usually we separate
@@ -119,6 +121,8 @@ METHODS
             ...
         );
 
+        POE::Kernel->run;
+
     In case you want to simply run a test in an asynchronous way (and that
     is why you're using POE), you could do it this way:
 
@@ -141,6 +145,8 @@ METHODS
                 );
             },
         );
+
+        POE::Kernel->run;
 
    tests
     Describes what tests should be done. You need to provide each event that
@@ -174,6 +180,8 @@ METHODS
             },
         );
 
+        POE::Kernel->run;
+
    params_type
     Ordinarily, the params are checked in an *ordered* fashion. This means
     that it checks the first ones against the first arrayref, the second one
@@ -201,6 +209,8 @@ METHODS
                 },
             },
         );
+
+        POE::Kernel->run;
 
   new
     Creates the underlying object. Please review POE::Test::Helpers::API for

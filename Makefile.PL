@@ -42,7 +42,7 @@ my %WriteMakefileArgs = (
     'parent' => '0',
     'strictures' => '1'
   },
-  'VERSION' => '1.10',
+  'VERSION' => '1.11',
   'test' => {
     'TESTS' => 't/*.t t/mooserole/*.t t/regular/*.t'
   }

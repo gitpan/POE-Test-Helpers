@@ -1,7 +1,7 @@
 use strictures 1;
 package POE::Test::Helpers;
 BEGIN {
-  $POE::Test::Helpers::VERSION = '1.10';
+  $POE::Test::Helpers::VERSION = '1.11';
 }
 # ABSTRACT: Testing framework for POE
 
@@ -304,7 +304,7 @@ POE::Test::Helpers - Testing framework for POE
 
 =head1 VERSION
 
-version 1.10
+version 1.11
 
 =head1 SYNOPSIS
 
@@ -341,6 +341,8 @@ allow you to write your code without getting in your way.
             next => { order => 1 },
         },
     );
+
+    POE::Kernel->run;
 
 Testing event-based programs is not trivial at all. There's a lot of hidden race
 conditions and unknown behavior afoot. Usually we separate the testing to
@@ -426,6 +428,8 @@ you want to monitor.
         ...
     );
 
+    POE::Kernel->run;
+
 In case you want to simply run a test in an asynchronous way (and that is why
 you're using POE), you could do it this way:
 
@@ -448,6 +452,8 @@ you're using POE), you could do it this way:
             );
         },
     );
+
+    POE::Kernel->run;
 
 =head3 tests
 
@@ -482,6 +488,8 @@ You can provide multiple tests per event, as much as you want.
         },
     );
 
+    POE::Kernel->run;
+
 =head3 params_type
 
 Ordinarily, the params are checked in an I<ordered> fashion. This means that it
@@ -510,9 +518,12 @@ You can change this simply by setting this attribute to C<unordered>.
         },
     );
 
+    POE::Kernel->run;
+
 =head2 new
 
-Creates the underlying object. Please review L<POE::Test::Helpers::API> for this.
+Creates the underlying object. Please review L<POE::Test::Helpers::API> for
+this.
 
 =head2 reached_event
 

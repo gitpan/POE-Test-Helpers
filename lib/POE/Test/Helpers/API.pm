@@ -1,7 +1,7 @@
 use strictures 1;
 package POE::Test::Helpers::API;
 BEGIN {
-  $POE::Test::Helpers::API::VERSION = '1.10';
+  $POE::Test::Helpers::API::VERSION = '1.11';
 }
 # ABSTRACT: Documentation of POE::Test::Helpers API
 1;
@@ -16,7 +16,7 @@ POE::Test::Helpers::API - Documentation of POE::Test::Helpers API
 
 =head1 VERSION
 
-version 1.10
+version 1.11
 
 =head1 DESCRIPTION
 

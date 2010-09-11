@@ -1,7 +1,7 @@
 use strictures 1;
 package POE::Test::Helpers::MooseRole;
 BEGIN {
-  $POE::Test::Helpers::MooseRole::VERSION = '1.10';
+  $POE::Test::Helpers::MooseRole::VERSION = '1.11';
 }
 # ABSTRACT: A Moose role for POE::Test::Helpers for MooseX::POE
 
@@ -88,7 +88,7 @@ POE::Test::Helpers::MooseRole - A Moose role for POE::Test::Helpers for MooseX::
 
 =head1 VERSION
 
-version 1.10
+version 1.11
 
 =head1 SYNOPSIS
 
